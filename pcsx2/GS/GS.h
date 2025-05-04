@@ -1727,6 +1727,16 @@ enum class GSVideoMode : uint8
 	HDTV_1080I
 };
 
+enum class AccBlendLevel : u8
+{
+	None,
+	Basic,
+	Medium,
+	High,
+	Full,
+	Ultra,
+};
+
 extern Pcsx2Config::GSOptions GSConfig;
 
 struct HostKeyEvent;

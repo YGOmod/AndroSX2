@@ -20,7 +20,7 @@
 GSRendererOGL::GSRendererOGL(std::unique_ptr<GSDevice> dev)
 	: GSRendererHW(std::move(dev), new GSTextureCacheOGL(this))
 {
-	m_sw_blending = theApp.GetConfigI("accurate_blending_unit");
+	m_sw_blending = static_cast<AccBlendLevel>(theApp.GetConfigI("accurate_blending_unit"));
 	if (theApp.GetConfigB("UserHacks"))
 		UserHacks_tri_filter = static_cast<TriFiltering>(theApp.GetConfigI("UserHacks_TriFilter"));
 	else
@@ -225,7 +225,7 @@ void GSRendererOGL::EmulateTextureShuffleAndFbmask()
 				m_prog_sel.ps.fbmask = 1;
 		}
 
-		if (m_prog_sel.ps.fbmask && m_sw_blending)
+		if (m_prog_sel.ps.fbmask && m_sw_blending != AccBlendLevel::None)
 		{
 			ps_cb.FbMask.r = rg_mask;
 			ps_cb.FbMask.g = rg_mask;
@@ -259,7 +259,7 @@ void GSRendererOGL::EmulateTextureShuffleAndFbmask()
 
 		m_om_csel.wrgba = ~ff_fbmask; // Enable channel if at least 1 bit is 0
 
-		m_prog_sel.ps.fbmask = m_sw_blending && (~ff_fbmask & ~zero_fbmask & 0xF);
+		m_prog_sel.ps.fbmask = m_sw_blending != AccBlendLevel::None && (~ff_fbmask & ~zero_fbmask & 0xF);
 
 		if (m_prog_sel.ps.fbmask)
 		{
@@ -512,28 +512,36 @@ void GSRendererOGL::EmulateBlending(bool& DATE_GL42, bool& DATE_GL45)
 	// Note: the [[fallthrough]] attribute tell compilers not to complain about not having breaks.
 	switch (m_sw_blending)
 	{
-		case ACC_BLEND_ULTRA:
+		case AccBlendLevel::Ultra:
 			sw_blending |= true;
 			[[fallthrough]];
-		case ACC_BLEND_FULL:
+		case AccBlendLevel::Full:
 			if (!m_vt.m_alpha.valid && (ALPHA.C == 0))
 				GetAlphaMinMax();
 			sw_blending |= (ALPHA.A != ALPHA.B) && ((ALPHA.C == 0 && m_vt.m_alpha.max > 128) || (ALPHA.C == 2 && ALPHA.FIX > 128u));
 			[[fallthrough]];
-		case ACC_BLEND_HIGH:
+		case AccBlendLevel::High:
 			sw_blending |= (ALPHA.C == 1);
 			[[fallthrough]];
-		case ACC_BLEND_MEDIUM:
+		case AccBlendLevel::Medium:
 			// Initial idea was to enable accurate blending for sprite rendering to handle
 			// correctly post-processing effect. Some games (ZoE) use tons of sprites as particles.
 			// In order to keep it fast, let's limit it to smaller draw call.
 			sw_blending |= m_vt.m_primclass == GS_SPRITE_CLASS && m_drawlist.size() < 100;
 			[[fallthrough]];
-		case ACC_BLEND_BASIC:
+		case AccBlendLevel::Basic:
 			sw_blending |= impossible_or_free_blend;
 			[[fallthrough]];
-		default:
+		case AccBlendLevel::None:
 			/*sw_blending |= accumulation_blend*/;
+	}
+
+	// Do not run BLEND MIX if sw blending is already present, it's less accurate
+	if (m_sw_blending)
+	if (m_sw_blending != AccBlendLevel::None)
+	{
+		blend_mix &= !sw_blending;
+		sw_blending |= blend_mix;
 	}
 
 	// Color clip
@@ -1136,7 +1144,7 @@ void GSRendererOGL::DrawPrims(GSTexture* rt, GSTexture* ds, GSTextureCache::Sour
 	m_prim_overlap = PrimitiveOverlap();
 
 	// Detect framebuffer read that will need special handling
-	if ((m_context->FRAME.Block() == m_context->TEX0.TBP0) && PRIM->TME && m_sw_blending)
+	if ((m_context->FRAME.Block() == m_context->TEX0.TBP0) && PRIM->TME && m_sw_blending != AccBlendLevel::None)
 	{
 		if ((m_context->FRAME.FBMSK == 0x00FFFFFF) && (m_vt.m_primclass == GS_TRIANGLE_CLASS))
 		{
@@ -1603,5 +1611,5 @@ bool GSRendererOGL::IsDummyTexture() const
 {
 	// Texture is actually the frame buffer. Stencil emulation to compute shadow (Jak series/tri-ace game)
 	// Will hit the "m_ps_sel.tex_is_fb = 1" path in the draw
-	return (m_context->FRAME.Block() == m_context->TEX0.TBP0) && PRIM->TME && m_sw_blending && m_vt.m_primclass == GS_TRIANGLE_CLASS && (m_context->FRAME.FBMSK == 0x00FFFFFF);
+	return (m_context->FRAME.Block() == m_context->TEX0.TBP0) && PRIM->TME && m_sw_blending != AccBlendLevel::None && m_vt.m_primclass == GS_TRIANGLE_CLASS && (m_context->FRAME.FBMSK == 0x00FFFFFF);
 }
