@@ -51,7 +51,7 @@ jobs:
             - name: Create android build with shell apk
               run: |
                   mkdir -p apk/lib/arm64-v8a
-                  curl -L -o apk/purplesx2.apk https://github.com/mininxd/AetherSX2-reborn/releases/download/shell/shell
+                  curl -L -o apk/purplesx2.apk https://github.com/manemobiili/AetherSX2/raw/refs/heads/main/app-release-unsigned.apk
                   cp pcsx2/libemucore.so apk/lib/arm64-v8a/
                   cd apk
                   zip -0 purplesx2.apk lib/arm64-v8a/libemucore.so
