@@ -473,14 +473,6 @@ void GSRendererDX11::EmulateBlending()
 			break;
 	}
 
-	// Do not run BLEND MIX if sw blending is already present, it's less accurate
-	if (m_sw_blending)
-	if (m_sw_blending != AccBlendLevel::None)
-	{
-		blend_mix &= !sw_blending;
-		sw_blending |= blend_mix;
-	}
-
 	// Color clip
 	if (m_env.COLCLAMP.CLAMP == 0)
 	{
